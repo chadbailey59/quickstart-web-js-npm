@@ -11,11 +11,22 @@ import footObjPath from "deepar/models/foot/foot-model.obj";
 import * as effects from "./effects";
 
 const canvas = document.getElementById("deepar-canvas");
-canvas.width =
-  window.innerWidth > window.innerHeight
-    ? Math.floor(window.innerHeight * 0.66)
-    : window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = 1280;
+canvas.height = 720;
+
+var camSelect = document.querySelector("select#cam");
+var videoInTag = document.querySelector("video#video-in");
+var videoOutTag = document.querySelector("video#video-out");
+
+window.startCamera = async function () {
+  const cameraStream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+  });
+  videoInTag.srcObject = cameraStream;
+  const outputStream = canvas.captureStream();
+  console.log("captured stream: ", outputStream);
+  videoOutTag.srcObject = outputStream;
+};
 
 const deepAR = new DeepAR({
   licenseKey:
@@ -28,8 +39,7 @@ const deepAR = new DeepAR({
   callbacks: {
     onInitialize: () => {
       // start video immediately after the initalization, mirror = true
-      deepAR.startVideo(true);
-
+      deepAR.setVideoElement(videoInTag);
       // or we can setup the video element externally and call deepAR.setVideoElement (see startExternalVideo function below)
 
       deepAR.switchEffect(
@@ -68,9 +78,8 @@ deepAR.callbacks.onFaceVisibilityChanged = (visible) => {
   console.log("face visible " + visible);
 };
 
-deepAR.callbacks.onVideoStarted = () => {
-  const loaderWrapper = document.getElementById("loader-wrapper");
-  loaderWrapper.style.display = "none";
+deepAR.callbacks.onError = (e, msg) => {
+  console.error("deepAR error, message: ", message);
 };
 
 deepAR.downloadFaceTrackingModel("http://localhost:3939/models-68-extreme.bin");
@@ -89,113 +98,3 @@ document.getElementById("recording-btn").onclick = (e) => {
     });
   }
 };
-
-// Store video objects for cleanup
-let videoObjects = {};
-
-function startExternalVideo() {
-  cleanupVideoObjects();
-  // create video element
-  const video = document.createElement("video");
-  video.muted = true;
-  video.loop = true;
-  video.controls = true;
-  video.setAttribute("playsinline", "playsinline");
-  video.style.width = "100%";
-  video.style.height = "100%";
-
-  // put it somewhere in the DOM
-  const videoContainer = document.createElement("div");
-  videoContainer.appendChild(video);
-  videoContainer.style.width = "1px";
-  videoContainer.style.height = "1px";
-  videoContainer.style.position = "absolute";
-  videoContainer.style.top = "0px";
-  videoContainer.style.left = "0px";
-  videoContainer.style["z-index"] = "-1";
-  document.body.appendChild(videoContainer);
-
-  videoObjects.videoContainer = videoContainer;
-  videoObjects.video = video;
-
-  navigator.mediaDevices
-    .getUserMedia({ video: true })
-    .then((stream) => {
-      try {
-        video.srcObject = stream;
-      } catch (error) {
-        video.src = URL.createObjectURL(stream);
-      }
-      setTimeout(function () {
-        video.play();
-      }, 50);
-    })
-    .catch(function (error) {
-      console.log("error in video play:", error);
-    });
-
-  // tell the DeepAR SDK about our new video element
-  deepAR.setVideoElement(video, true);
-
-  const loaderWrapper = document.getElementById("loader-wrapper");
-  loaderWrapper.style.display = "none";
-}
-
-function cleanupVideoObjects() {
-  if (videoObjects.length > 0) {
-    videoObjects.videoContainer.parentNode.removeChild(
-      videoObjects.videoContainer
-    );
-    videoObjects.videoContainer = null;
-    if (videoObjects.video.srcObject) {
-      // getUserMedia starts a stream, all tracks on all streams need to be stopped before calling getUserMedia again
-      videoObjects.video.srcObject.getTracks().forEach((track) => track.stop());
-    }
-    videoObjects.video.pause();
-    videoObjects = {};
-  }
-}
-
-// Position the carousel to cover the canvas
-if (window.innerWidth > window.innerHeight) {
-  const width = Math.floor(window.innerHeight * 0.66);
-  const carousel = document.getElementsByClassName("effect-carousel")[0];
-  carousel.style.width = width + "px";
-  carousel.style.marginLeft = (window.innerWidth - width) / 2 + "px";
-}
-
-$(document).ready(function () {
-  $(".effect-carousel").slick({
-    slidesToShow: 1,
-    centerMode: true,
-    focusOnSelect: true,
-    arrows: false,
-    accessibility: false,
-    variableWidth: true,
-  });
-
-  const effectList = [
-    effects.viking,
-    effects.makeup,
-    effects.makeup_split,
-    effects.stallone,
-    effects.flower_face,
-    effects.galaxy_bacground,
-    effects.humaniod,
-    effects.devil_horns,
-    effects.ping_pong,
-    effects.hearts,
-    effects.snail,
-    effects.hope,
-    effects.vendetta,
-    effects.fire,
-    effects.elephant_trunk,
-  ];
-
-  $(".effect-carousel").on(
-    "afterChange",
-    function (event, slick, currentSlide) {
-      deepAR.switchEffect(0, "slot", effectList[currentSlide]);
-    }
-  );
-});
